@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35828.75 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "app_remote_control", "app_remote_control.vcxproj", "{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		DebugRemote|x64 = DebugRemote|x64
+		DebugRemote|x86 = DebugRemote|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Debug|x64.ActiveCfg = Debug|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Debug|x64.Build.0 = Debug|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Debug|x86.ActiveCfg = Debug|Win32
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Debug|x86.Build.0 = Debug|Win32
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.DebugRemote|x64.ActiveCfg = DebugRemote|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.DebugRemote|x64.Build.0 = DebugRemote|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.DebugRemote|x86.ActiveCfg = DebugRemote|Win32
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.DebugRemote|x86.Build.0 = DebugRemote|Win32
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Release|x64.ActiveCfg = Release|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Release|x64.Build.0 = Release|x64
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Release|x86.ActiveCfg = Release|Win32
+		{286C62AC-FBF0-49EB-8CB7-554E11A8FB14}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E1528F08-3C44-483F-A067-74ACF04E209E}
+	EndGlobalSection
+EndGlobal

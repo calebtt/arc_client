@@ -1,0 +1,11 @@
+{
+  "name": "appremotecontrol",
+  "version": "1.0.0",
+  "dependencies": [
+    "websocketpp",
+    "boost-asio",
+	"boost-random",
+	"boost-beast",
+	"nlohmann-json"
+  ]
+}

@@ -2,7 +2,7 @@
   "name": "appremotecontrol",
   "version": "1.0.0",
   "dependencies": [
-    "websocketpp",
+    "openssl",
     "boost-asio",
 	"boost-beast",
 	"nlohmann-json"

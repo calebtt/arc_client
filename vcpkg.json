@@ -4,7 +4,6 @@
   "dependencies": [
     "websocketpp",
     "boost-asio",
-	"boost-random",
 	"boost-beast",
 	"nlohmann-json"
   ]

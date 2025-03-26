@@ -83,10 +83,11 @@ unsigned short GetArgPort(const std::string& arg)
 // Launch with "type=local" for local debugging.
 int main(int argc, char* argv[])
 {
+    const std::string portString{ "443" };
     const bool hasArg = argc > 1;
     const bool isTestSession = hasArg && IsArgTypeLocal(argv[1]);
     const std::string session_token = get_session_token();
-    const std::string serverAddress = isTestSession ? "localhost" : "slowcasting.com";
+    const std::string serverAddress = isTestSession ? "localhost" : "arcserver.cloud";
 
     PrintIntroBanner();
 
@@ -100,8 +101,9 @@ int main(int argc, char* argv[])
         EnterForExit();
         return 1;
     }
-    // wss://slowcasting.com:8443
-    WebSocketClient(serverAddress, "443", session_token, "desktop");
+
+    std::cout << "[Session] Connecting to " << serverAddress << ":" << portString << '\n';
+    WebSocketClient(serverAddress, portString, session_token, "desktop");
     EnterForExit();
     return 0;
 }

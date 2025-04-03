@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "dependencies": [
     "openssl",
+	"zlib",
     "boost-asio",
 	"boost-beast",
 	"nlohmann-json"

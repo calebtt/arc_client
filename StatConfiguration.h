@@ -7,6 +7,7 @@
 #endif
 #include <Windows.h>
 #include "StreamToActionTranslator.h"
+#include <atomic>
 
 /**
 * \brief Key Repeat Delay is the time delay a button has in-between activations.
@@ -41,15 +42,35 @@ static constexpr int32_t MouseDragEnd{ 15 };
 static constexpr int32_t ToggleOnScreenKeyboard{ 16 };
 
 // Multimedia Controls
-static constexpr int32_t MediaPlayPause = 17;
-static constexpr int32_t MediaNextTrack = 18;
-static constexpr int32_t MediaPrevTrack = 19;
-static constexpr int32_t VolumeUp = 20;
-static constexpr int32_t VolumeDown = 21;
-static constexpr int32_t VolumeMute = 22;
-static constexpr int32_t MediaStop = 23;
+static constexpr int32_t MediaPlayPause{ 17 };
+static constexpr int32_t MediaNextTrack{ 18 };
+static constexpr int32_t MediaPrevTrack{ 19 };
+static constexpr int32_t VolumeUp{ 20 };
+static constexpr int32_t VolumeDown{ 21 };
+static constexpr int32_t VolumeMute{ 22 };
+static constexpr int32_t MediaStop{ 23 };
 
+static constexpr int32_t LaunchAmazonPrime{ 24 };
+static constexpr int32_t LaunchTubi{ 25 };
+static constexpr int32_t LaunchNetflix{ 26 };
+static constexpr int32_t EscapeKey{ 27 };
+static constexpr int32_t SensitivityToggle{ 28 };
 
+struct SensitivityToggler
+{
+	std::atomic<int> CurrentSensitivity{ 1 };
+
+	int Get() { return CurrentSensitivity.load(); }
+	auto Toggle() {
+		if (CurrentSensitivity.load() == 1)
+			CurrentSensitivity.store(2);
+		else
+			CurrentSensitivity.store(1);
+	}
+};
+
+// global sensitivity instance
+static SensitivityToggler sens{};
 
 inline auto CallSendInput(INPUT* inp, std::uint32_t numSent) noexcept -> UINT
 {
@@ -181,8 +202,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(0, 1); },
-			.OnRepeat = []() { SendMouseMove(0, 1); },
+			.OnDown = [&]() { SendMouseMove(0, sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(0, sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveUp,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -192,8 +213,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(0, -1); },
-			.OnRepeat = []() { SendMouseMove(0, -1); },
+			.OnDown = [&]() { SendMouseMove(0, -sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(0, -sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveDown,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -203,8 +224,8 @@ inline auto GetDriverMouseMappings()
 		// Move Right
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(1, 0); },
-			.OnRepeat = []() { SendMouseMove(1, 0); },
+			.OnDown = [&]() { SendMouseMove(sens.Get(), 0); },
+			.OnRepeat = [&]() { SendMouseMove(sens.Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -214,8 +235,8 @@ inline auto GetDriverMouseMappings()
 		// Move Left
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(-1, 0); },
-			.OnRepeat = []() { SendMouseMove(-1, 0); },
+			.OnDown = [&]() { SendMouseMove(-sens.Get(), 0); },
+			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -225,8 +246,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Left
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(-1, 1); },
-			.OnRepeat = []() { SendMouseMove(-1, 1); },
+			.OnDown = [&]() { SendMouseMove(-sens.Get(), sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveUpLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -236,8 +257,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Right
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(1, 1); },
-			.OnRepeat = []() { SendMouseMove(1, 1); },
+			.OnDown = [&]() { SendMouseMove(sens.Get(), sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(sens.Get(), sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveUpRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -247,8 +268,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Right
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(1, -1); },
-			.OnRepeat = []() { SendMouseMove(1, -1); },
+			.OnDown = [&]() { SendMouseMove(sens.Get(), -sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(sens.Get(), -sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveDownRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -258,8 +279,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Left
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseMove(-1, -1); },
-			.OnRepeat = []() { SendMouseMove(-1, -1); },
+			.OnDown = [&]() { SendMouseMove(-sens.Get(), -sens.Get()); },
+			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), -sens.Get()); },
 			.ButtonVirtualKeycode = MouseMoveDownLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -327,8 +348,40 @@ inline auto GetDriverKeyboardMappings()
 			.OnUp = []() { SendMultimediaKey(VK_MEDIA_STOP, false); },
 			.ButtonVirtualKeycode = MediaStop,
 			.RepeatingKeyBehavior = RepeatType::None
-		}
+		},
+		// Launch Prime Video
+		MappingContainer{
+			.OnDown = []() { system("start https://www.amazon.com/gp/video/storefront"); },
+			.ButtonVirtualKeycode = LaunchAmazonPrime,
+			.RepeatingKeyBehavior = RepeatType::None
+		},
 
+		// Launch Tubi
+		MappingContainer{
+			.OnDown = []() { system("start https://tubitv.com"); },
+			.ButtonVirtualKeycode = LaunchTubi,
+			.RepeatingKeyBehavior = RepeatType::None
+		},
+
+		// Launch Netflix
+		MappingContainer{
+			.OnDown = []() { system("start https://www.netflix.com"); },
+			.ButtonVirtualKeycode = LaunchNetflix,
+			.RepeatingKeyBehavior = RepeatType::None
+		},
+		MappingContainer
+		{
+			.OnDown = []() { SendMultimediaKey(VK_ESCAPE, true); },
+			.OnUp = []() { SendMultimediaKey(VK_ESCAPE, false); },
+			.ButtonVirtualKeycode = EscapeKey,
+			.RepeatingKeyBehavior = RepeatType::None
+		},
+		MappingContainer
+		{
+			.OnDown = [&]() { sens.Toggle(); },
+			.ButtonVirtualKeycode = SensitivityToggle,
+			.RepeatingKeyBehavior = RepeatType::None
+		},
 	};
 
 	return mapBuffer;

@@ -7,6 +7,7 @@
 #endif
 #include <Windows.h>
 #include "StreamToActionTranslator.h"
+#include "Win32Overlay.h"
 #include <atomic>
 
 /**
@@ -55,6 +56,7 @@ static constexpr int32_t LaunchTubi{ 25 };
 static constexpr int32_t LaunchNetflix{ 26 };
 static constexpr int32_t EscapeKey{ 27 };
 static constexpr int32_t SensitivityToggle{ 28 };
+static constexpr int32_t ToggleMonitorOverlay{ 29 };
 
 struct SensitivityToggler
 {
@@ -382,6 +384,12 @@ inline auto GetDriverKeyboardMappings()
 			.ButtonVirtualKeycode = SensitivityToggle,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
+		MappingContainer
+		{
+			.OnDown = []() { ToggleMultiMonitorOverlay(); },
+			.ButtonVirtualKeycode = ToggleMonitorOverlay,
+			.RepeatingKeyBehavior = RepeatType::None
+		}
 	};
 
 	return mapBuffer;

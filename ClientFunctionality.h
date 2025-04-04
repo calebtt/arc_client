@@ -49,7 +49,8 @@ static const std::unordered_map<std::string, int32_t> commandLookup
 	{"open_tubi", LaunchTubi},
 	{"open_netflix", LaunchNetflix},
 	{"press_escape", EscapeKey},
-	{"toggle_mouse_sensitivity", SensitivityToggle}
+	{"toggle_mouse_sensitivity", SensitivityToggle},
+	{"toggle_blue_light_filter", ToggleMonitorOverlay}
 };
 
 

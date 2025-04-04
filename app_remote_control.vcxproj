@@ -194,6 +194,7 @@
     <ClInclude Include="ClientFunctionality.h" />
     <ClInclude Include="StatConfiguration.h" />
     <ClInclude Include="StreamToActionTranslator.h" />
+    <ClInclude Include="Win32Overlay.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="arc_client.cpp" />

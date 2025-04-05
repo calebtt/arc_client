@@ -40,8 +40,8 @@ static const std::unordered_map<std::string, int32_t> commandLookup
 
 	// Multimedia controls
 	{"play_pause", MediaPlayPause},
-	{"next", MediaNextTrack},
-	{"previous", MediaPrevTrack},
+	{"next_track", MediaNextTrack},
+	{"previous_track", MediaPrevTrack},
 	{"volume_up", VolumeUp},
 	{"volume_down", VolumeDown},
 	{"mute_toggle", VolumeMute},

@@ -71,8 +71,12 @@ struct SensitivityToggler
 	}
 };
 
-// global sensitivity instance
-static SensitivityToggler sens{};
+// get global sensitivity instance
+SensitivityToggler& GetSensitivityTogglerInstance() 
+{
+	static SensitivityToggler instance;
+	return instance;
+}
 
 inline auto CallSendInput(INPUT* inp, std::uint32_t numSent) noexcept -> UINT
 {
@@ -204,8 +208,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(0, sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(0, sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(0, GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(0, GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveUp,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -215,8 +219,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(0, -sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(0, -sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(0, -GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(0, -GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveDown,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -226,8 +230,8 @@ inline auto GetDriverMouseMappings()
 		// Move Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(sens.Get(), 0); },
-			.OnRepeat = [&]() { SendMouseMove(sens.Get(), 0); },
+			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), 0); },
+			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -237,8 +241,8 @@ inline auto GetDriverMouseMappings()
 		// Move Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-sens.Get(), 0); },
-			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), 0); },
+			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), 0); },
+			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -248,8 +252,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-sens.Get(), sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveUpLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -259,8 +263,8 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(sens.Get(), sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(sens.Get(), sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveUpRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -270,8 +274,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(sens.Get(), -sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(sens.Get(), -sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveDownRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -281,8 +285,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-sens.Get(), -sens.Get()); },
-			.OnRepeat = [&]() { SendMouseMove(-sens.Get(), -sens.Get()); },
+			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveDownLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -380,7 +384,7 @@ inline auto GetDriverKeyboardMappings()
 		},
 		MappingContainer
 		{
-			.OnDown = [&]() { sens.Toggle(); },
+			.OnDown = [&]() { GetSensitivityTogglerInstance().Toggle(); },
 			.ButtonVirtualKeycode = SensitivityToggle,
 			.RepeatingKeyBehavior = RepeatType::None
 		},

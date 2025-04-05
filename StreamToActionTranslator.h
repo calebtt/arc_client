@@ -28,6 +28,7 @@ For more information, please refer to https://unlicense.org
 #include <unordered_map>
 #include <unordered_set>
 #include <memory>
+#include <cassert>
 
 namespace sds
 {

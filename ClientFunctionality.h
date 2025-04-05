@@ -21,6 +21,7 @@ namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
 namespace ssl = boost::asio::ssl;
 namespace http = boost::beast::http;
+using namespace std::literals;
 
 
 // Tracks "keydown" states for command keycodes
@@ -70,7 +71,7 @@ void UpdateStateBuffer(const std::string state, const std::string command)
 	}
 }
 
-void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_signal)
+void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_signal, const std::function<void(const std::string&)>& OnError)
 {
 	ws.async_read(buffer, [&](boost::system::error_code ec, std::size_t bytes_transferred) {
 		if (ec == websocket::error::closed) {
@@ -80,7 +81,11 @@ void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_s
 		}
 
 		if (ec) {
-			std::cerr << "[ERROR] Desktop Client Read Error: " << ec.message() << "\n";
+			const std::string errMsg = "[ERROR] Desktop Client Read Error: "s + ec.message() + "\n"s;
+			std::cerr << errMsg;
+			if (OnError)
+				OnError(errMsg);
+
 			stop_signal.store(true);
 			return;
 		}
@@ -102,16 +107,27 @@ void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_s
 			}
 		}
 		catch (const nlohmann::json::parse_error& e) {
-			std::cerr << "[ERROR] JSON parse error: " << e.what() << "\n";
+			const std::string errMsg = "[ERROR] JSON parse error: "s + e.what() + "\n"s;
+			std::cerr << errMsg;
+			if (OnError)
+				OnError(errMsg);
 		}
 
 		// Schedule the next read (ensures continuous message handling)
-		ReadMessage(ws, buffer, stop_signal);
+		ReadMessage(ws, buffer, stop_signal, OnError);
 		});
 }
 
-void WebSocketClient(const std::string& host, const std::string& port, const std::string& session_token,
-	const std::string& client_type) {
+void WebSocketClient(
+	const std::string& host,
+	const std::string& port,
+	const std::string& session_token,
+	const std::string& client_type,
+	std::atomic<bool>& should_stop,
+	const std::function<void()>& OnConnect,
+	const std::function<void(const std::string&)>& OnError
+)
+{
 
 	constexpr int max_retries = -1; // Infinite retries
 	constexpr int reconnect_delay_ms = 3000; // Delay between reconnects
@@ -136,7 +152,7 @@ void WebSocketClient(const std::string& host, const std::string& port, const std
 				}
 			));
 
-			std::atomic<bool> stop_signal{ false };
+			//std::atomic<bool> stop_signal{ false };
 
 			const auto results = resolver.resolve(host, port);
 			asio::connect(ws.next_layer().next_layer(), results.begin(), results.end());
@@ -150,12 +166,16 @@ void WebSocketClient(const std::string& host, const std::string& port, const std
 			ws.write(asio::buffer(register_msg.dump()));
 
 			std::cout << "[" << client_type << " Client] Connected with session: " << session_token << "\n";
+			if (OnConnect)
+			{
+				OnConnect();
+			}
 
 			beast::flat_buffer buffer;
-			ReadMessage(ws, buffer, stop_signal);
+			ReadMessage(ws, buffer, should_stop, OnError);
 
 			std::thread translator_thread([&]() {
-				while (!stop_signal.load()) {
+				while (!should_stop.load()) {
 					sds::SmallVector_t<int32_t> heldDownKeys;
 					{
 						std::lock_guard lock(keyStateMutex);
@@ -172,7 +192,7 @@ void WebSocketClient(const std::string& host, const std::string& port, const std
 			std::thread asio_thread([&]() { ioc.run(); });
 
 			auto last_ping_time = std::chrono::steady_clock::now();
-			while (!stop_signal.load()) {
+			while (!should_stop.load()) {
 				if (std::chrono::steady_clock::now() - last_ping_time > ping_interval) {
 					boost::system::error_code ec;
 					ws.ping({}, ec);
@@ -187,7 +207,7 @@ void WebSocketClient(const std::string& host, const std::string& port, const std
 
 				std::this_thread::sleep_for(std::chrono::milliseconds(500));
 			}
-			stop_signal.store(true);
+			should_stop.store(true);
 			work_guard.reset();  // Allow io_context to stop
 			ioc.stop();          // Actually cause .run() to exit
 			asio_thread.join();
@@ -205,7 +225,17 @@ void WebSocketClient(const std::string& host, const std::string& port, const std
 			break; // Exit loop normally
 		}
 		catch (const std::exception& e) {
-			std::cerr << "[ERROR] " << client_type << " Client Error: " << e.what() << "\n";
+			if (should_stop.load())
+			{
+				return;
+			}
+
+			std::string errMsg = e.what();
+			std::cerr << "[ERROR] " << client_type << " Client Error: " << errMsg << "\n";
+			if (OnError) {
+				OnError(errMsg);
+			}
+
 			++retry_count;
 			std::cerr << "[INFO] Attempting to reconnect in " << reconnect_delay_ms << "ms...\n";
 			std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms));

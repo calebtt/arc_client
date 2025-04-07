@@ -54,11 +54,37 @@ static const std::unordered_map<std::string, int32_t> commandLookup
 	{"toggle_blue_light_filter", ToggleMonitorOverlay}
 };
 
+struct ClientCallbacks
+{
+	std::function<void()> OnConnect;
+	std::function<void(const std::string&)> OnError;
+	std::function<void(std::set<std::string>)> OnClientListChanged;
+};
 
 // Array to track 0 = up, 1 = down
 static std::array<bool, 32> keyStateBuffer{};
 static std::mutex keyStateMutex{};
 static sds::Translator translator(GetAllMappings());
+
+std::set<std::string> connectedClientUUIDs;
+std::set<std::string> trustedClientUUIDs;
+
+void HandleWebClientListUpdate(const nlohmann::json& json, const ClientCallbacks& callbacks) {
+	connectedClientUUIDs.clear();
+	if (json.contains("clients") && json["clients"].is_array()) {
+		for (const auto& entry : json["clients"]) {
+			if (entry.contains("client_id")) {
+				connectedClientUUIDs.insert(entry["client_id"].get<std::string>());
+			}
+		}
+	}
+
+	if (callbacks.OnClientListChanged) {
+		callbacks.OnClientListChanged(connectedClientUUIDs);
+	}
+}
+
+
 
 void UpdateStateBuffer(const std::string state, const std::string command)
 {
@@ -71,7 +97,7 @@ void UpdateStateBuffer(const std::string state, const std::string command)
 	}
 }
 
-void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_signal, const std::function<void(const std::string&)>& OnError)
+void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_signal, const ClientCallbacks& callbacks)
 {
 	ws.async_read(buffer, [&](boost::system::error_code ec, std::size_t bytes_transferred) {
 		if (ec == websocket::error::closed) {
@@ -83,8 +109,8 @@ void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_s
 		if (ec) {
 			const std::string errMsg = "[ERROR] Desktop Client Read Error: "s + ec.message() + "\n"s;
 			std::cerr << errMsg;
-			if (OnError)
-				OnError(errMsg);
+			if (callbacks.OnError)
+				callbacks.OnError(errMsg);
 
 			stop_signal.store(true);
 			return;
@@ -95,26 +121,45 @@ void ReadMessage(auto& ws, beast::flat_buffer& buffer, std::atomic<bool>& stop_s
 
 		try {
 			const auto json = nlohmann::json::parse(payload);
+
+			bool handled = false;
+
+			if (json.contains("type") && json["type"] == "web_client_list") {
+				HandleWebClientListUpdate(json, callbacks);
+				handled = true;
+			}
+
 			if (json.contains("command") && json.contains("state")) {
 				const std::string command = json["command"];
 				const std::string state = json["state"];
 
-				std::cout << "[Desktop Client] Received Command: " << command
-					<< " | State: " << state << "\n";
+				if (json.contains("client_id")) {
+					const std::string& uuid = json["client_id"];
+					if (!trustedClientUUIDs.contains(uuid)) {
+						if (callbacks.OnError) {
+							callbacks.OnError("[Security] Ignoring command from untrusted client: "s + uuid + "\n"s);
+						}
+						handled = true;
+					}
+				}
 
-				// Process commands
-				UpdateStateBuffer(state, command);
+				if (!handled) {
+					std::cout << "[Desktop Client] Received Command: " << command
+						<< " | State: " << state << "\n";
+
+					UpdateStateBuffer(state, command);
+				}
 			}
 		}
 		catch (const nlohmann::json::parse_error& e) {
 			const std::string errMsg = "[ERROR] JSON parse error: "s + e.what() + "\n"s;
 			std::cerr << errMsg;
-			if (OnError)
-				OnError(errMsg);
+			if (callbacks.OnError)
+				callbacks.OnError(errMsg);
 		}
 
-		// Schedule the next read (ensures continuous message handling)
-		ReadMessage(ws, buffer, stop_signal, OnError);
+		// The next read
+		ReadMessage(ws, buffer, stop_signal, callbacks);
 		});
 }
 
@@ -124,11 +169,9 @@ void WebSocketClient(
 	const std::string& session_token,
 	const std::string& client_type,
 	std::atomic<bool>& should_stop,
-	const std::function<void()>& OnConnect,
-	const std::function<void(const std::string&)>& OnError
+	const ClientCallbacks& callbacks
 )
 {
-
 	constexpr int max_retries = -1; // Infinite retries
 	constexpr int reconnect_delay_ms = 3000; // Delay between reconnects
 	constexpr std::chrono::seconds ping_interval{ 50 };
@@ -166,13 +209,13 @@ void WebSocketClient(
 			ws.write(asio::buffer(register_msg.dump()));
 
 			std::cout << "[" << client_type << " Client] Connected with session: " << session_token << "\n";
-			if (OnConnect)
+			if (callbacks.OnConnect)
 			{
-				OnConnect();
+				callbacks.OnConnect();
 			}
 
 			beast::flat_buffer buffer;
-			ReadMessage(ws, buffer, should_stop, OnError);
+			ReadMessage(ws, buffer, should_stop, callbacks);
 
 			std::thread translator_thread([&]() {
 				while (!should_stop.load()) {
@@ -232,8 +275,8 @@ void WebSocketClient(
 
 			std::string errMsg = e.what();
 			std::cerr << "[ERROR] " << client_type << " Client Error: " << errMsg << "\n";
-			if (OnError) {
-				OnError(errMsg);
+			if (callbacks.OnError) {
+				callbacks.OnError(errMsg);
 			}
 
 			++retry_count;

@@ -23,6 +23,7 @@
 #define ID_TRAY_USER_TOKEN 1004
 //#define ID_TRAY_DISABLE_CONNECTION 1005
 #define ID_TRAY_TOGGLE_CONNECTION 1005
+#define ID_TRAY_UUID_BASE 3000
 
 
 NOTIFYICONDATA nid = {};
@@ -31,6 +32,9 @@ HWND g_hwnd = nullptr;
 HWND hTokenInput = nullptr;
 
 WebSocketClientGlobal GlobalBeastClient{};
+
+std::vector<std::string> trayUUIDIndex; // index 0 = UUID for ID_TRAY_UUID_BASE + 0
+std::set<std::string> webClientUUIDs;
 
 bool IsClientRunning()
 {
@@ -45,13 +49,21 @@ void UpdateConnectionMenuCheckmark() {
 void ShowBalloonMessage(const std::wstring& title, const std::wstring& message, DWORD iconType = NIIF_INFO, UINT timeoutMs = 1000)
 {
     nid.uFlags = NIF_INFO;
-    wcsncpy_s(nid.szInfoTitle, title.c_str(), ARRAYSIZE(nid.szInfoTitle));
-    wcsncpy_s(nid.szInfo, message.c_str(), ARRAYSIZE(nid.szInfo));
+
+    // Clamp the title to 63 characters + null terminator
+    std::wstring safeTitle = title.substr(0, ARRAYSIZE(nid.szInfoTitle) - 1);
+    wcsncpy_s(nid.szInfoTitle, safeTitle.c_str(), ARRAYSIZE(nid.szInfoTitle));
+
+    // Clamp the message to 255 characters + null terminator
+    std::wstring safeMessage = message.substr(0, ARRAYSIZE(nid.szInfo) - 1);
+    wcsncpy_s(nid.szInfo, safeMessage.c_str(), ARRAYSIZE(nid.szInfo));
+
     nid.dwInfoFlags = iconType;
     nid.uTimeout = timeoutMs;
 
     Shell_NotifyIcon(NIM_MODIFY, &nid);
 }
+
 
 void UpdateTrayTooltip(const std::wstring& tip) {
     wcsncpy_s(nid.szTip, tip.c_str(), sizeof(nid.szTip) / sizeof(WCHAR));
@@ -60,7 +72,23 @@ void UpdateTrayTooltip(const std::wstring& tip) {
 }
 
 void InitTrayIcon(HWND hwnd) {
+
+    HMENU hUUIDMenu = CreatePopupMenu();
+    trayUUIDIndex.clear();
+
+    for (const auto& uuid : connectedClientUUIDs) {
+        trayUUIDIndex.push_back(uuid);
+        UINT id = ID_TRAY_UUID_BASE + static_cast<UINT>(trayUUIDIndex.size() - 1);
+        AppendMenuA(hUUIDMenu,
+            MF_STRING | (trustedClientUUIDs.contains(uuid) ? MF_CHECKED : MF_UNCHECKED),
+            id,
+            uuid.c_str());
+    }
+
     hTrayMenu = CreatePopupMenu();
+    AppendMenuW(hTrayMenu, MF_POPUP, (UINT_PTR)hUUIDMenu, L"Allowed Web Clients");
+
+    AppendMenuW(hTrayMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hTrayMenu, MF_STRING, ID_TRAY_TOGGLE_BRIGHTNESS, L"Toggle Brightness Level");
     AppendMenuW(hTrayMenu, MF_STRING, ID_TRAY_SENSITIVITY_TOGGLE, L"Toggle Mouse Sensitivity");
     AppendMenuW(hTrayMenu, MF_SEPARATOR, 0, nullptr);
@@ -70,29 +98,35 @@ void InitTrayIcon(HWND hwnd) {
     AppendMenuW(hTrayMenu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(hTrayMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
 
-    nid.cbSize = sizeof(NOTIFYICONDATA);
-    nid.hWnd = hwnd;
-    nid.uID = 1;
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-    nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIcon(nullptr, IDI_INFORMATION);
-    wcscpy_s(nid.szTip, L"ARC Client running in tray");
+    static bool ranOnce = false;
 
-    Shell_NotifyIcon(NIM_ADD, &nid);
+    if (!ranOnce)
+    {
+        nid.cbSize = sizeof(NOTIFYICONDATA);
+        nid.hWnd = hwnd;
+        nid.uID = 1;
+        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+        nid.uCallbackMessage = WM_TRAYICON;
+        nid.hIcon = LoadIcon(nullptr, IDI_INFORMATION);
+        wcscpy_s(nid.szTip, L"ARC Client running in tray");
 
-    // Show welcome balloon
-    nid.uFlags = NIF_INFO;
+        Shell_NotifyIcon(NIM_ADD, &nid);
 
-    wcscpy_s(nid.szInfoTitle, L"ARC Client");
+        // Show welcome balloon
+        nid.uFlags = NIF_INFO;
 
-    std::string token = ReadSessionToken();
-    std::wstring tokenW(token.begin(), token.end());
-    std::wstring message = L"Sitting in system tray. Right-click for options.\nToken: " + tokenW;
+        wcscpy_s(nid.szInfoTitle, L"ARC Client");
 
-    wcscpy_s(nid.szInfo, message.c_str());
-    nid.dwInfoFlags = NIIF_INFO;
-    nid.uTimeout = 1000; // (in milliseconds)
-    Shell_NotifyIcon(NIM_MODIFY, &nid);
+        std::string token = ReadSessionToken();
+        std::wstring tokenW(token.begin(), token.end());
+        std::wstring message = L"Sitting in system tray. Right-click for options.\nToken: " + tokenW;
+
+        wcscpy_s(nid.szInfo, message.c_str());
+        nid.dwInfoFlags = NIIF_INFO;
+        nid.uTimeout = 1000; // (in milliseconds)
+        Shell_NotifyIcon(NIM_MODIFY, &nid);
+        ranOnce = true;
+    }
 }
 
 void ShowTrayMenu(HWND hwnd) {
@@ -185,8 +219,31 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
     case WM_TRAYICON:
         if (lParam == WM_RBUTTONUP) ShowTrayMenu(hwnd);
         return 0;
-
+    case WM_APP + 1:
+        DestroyMenu(hTrayMenu);
+        InitTrayIcon(hwnd);
+        return 0;
     case WM_COMMAND:
+
+        if (LOWORD(wParam) >= ID_TRAY_UUID_BASE && LOWORD(wParam) < ID_TRAY_UUID_BASE + trayUUIDIndex.size()) {
+            size_t index = LOWORD(wParam) - ID_TRAY_UUID_BASE;
+            const std::string& uuid = trayUUIDIndex[index];
+
+            if (trustedClientUUIDs.contains(uuid)) {
+                trustedClientUUIDs.erase(uuid);
+            }
+            else {
+                trustedClientUUIDs.insert(uuid);
+            }
+
+            //ShowBalloonMessage(L"Trusted Clients Updated", std::wstring(uuid.begin(), uuid.end()).c_str());
+
+            // Optional: Rebuild menu immediately to reflect checkbox change
+            DestroyMenu(hTrayMenu);
+            InitTrayIcon(g_hwnd);
+            return 0;
+        }
+
         switch (LOWORD(wParam)) {
         case ID_TRAY_EXIT:
             GlobalBeastClient.StopClientThread();
@@ -228,6 +285,22 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
 int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) 
 {
     const wchar_t* className = L"ArcTrayWindow";
+    auto isTypeLocal = [&]()
+        {
+            int argc{};
+            LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+            for (int i = 1; i < argc; ++i) {
+                std::wstring arg = argv[i];
+                if (arg.find(L"type=local") != std::wstring::npos) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    const bool useLocalServer = isTypeLocal();
+    const std::string serverUrl = useLocalServer
+        ? "localhost"
+        : "arcserver.cloud";
 
     WNDCLASS wc = {};
     wc.lpfnWndProc = MainWndProc;
@@ -240,16 +313,21 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
 
     InitTrayIcon(g_hwnd);
 
-    GlobalBeastClient.OnError = [](const std::string& errorMessage)
+    GlobalBeastClient.Callbacks.OnError = [](const std::string& errorMessage)
         {
             std::wstring wideError(errorMessage.begin(), errorMessage.end());
             ShowBalloonMessage(L"WebSocket Error", wideError, NIIF_ERROR);
         };
-    GlobalBeastClient.OnConnect = []()
+    GlobalBeastClient.Callbacks.OnConnect = []()
         {
             ShowBalloonMessage(L"Connected", L"WebSocket session started.");
         };
+    GlobalBeastClient.Callbacks.OnClientListChanged = [](std::set<std::string> clients) {
+        webClientUUIDs = clients;
+        PostMessage(g_hwnd, WM_APP + 1, 0, 0); // signal the tray window to rebuild menu
+        };
 
+    GlobalBeastClient.ServerAddress = serverUrl;
     GlobalBeastClient.Init(ReadSessionToken());
 
     MSG msg;

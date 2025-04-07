@@ -47,8 +47,7 @@ void StartArcClient(
     const std::string& serverAddress, 
     const std::string& sessionToken, 
     std::atomic<bool>& should_stop,
-    const std::function<void()>& OnConnect,
-    const std::function<void(const std::string&)>& OnError)
+    const ClientCallbacks& callbacks)
 {
     if (sessionToken.empty()) {
         std::cerr << "Error: No valid session token found. Exiting.\n";
@@ -56,7 +55,7 @@ void StartArcClient(
     }
 
     std::cout << "[Session] Connecting to " << serverAddress << ":" << portString << '\n';
-    WebSocketClient(serverAddress, portString, sessionToken, "desktop", should_stop, OnConnect, OnError);
+    WebSocketClient(serverAddress, portString, sessionToken, "desktop", should_stop, callbacks);
     return;
 }
 
@@ -64,21 +63,20 @@ void StartArcClient(
 struct WebSocketClientGlobal
 {
     const std::string PortString{ "443" };
-    const std::string ServerAddress{ "arcserver.cloud" };
+    std::string ServerAddress{ "arcserver.cloud" };
 
     // The thread upon which all Asio, Beast, SSL, Websockets work is initiated.
     std::thread ClientThread;
     std::string CurrentSessionToken;
     std::atomic<bool> IsStopRequested{};
 
-    std::function<void()> OnConnect;
-    std::function<void(const std::string&)> OnError;
+    ClientCallbacks Callbacks;
 
     void Init(std::string sessionToken)
     {
         CurrentSessionToken = std::move(sessionToken);
         IsStopRequested.store(false);
-        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, OnConnect, OnError); });
+        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks); });
     }
 
     ~WebSocketClientGlobal() noexcept
@@ -93,7 +91,7 @@ struct WebSocketClientGlobal
         // Reset stop request, start new thread with new session token.
         CurrentSessionToken = std::move(sessionTokenUpdate);
         IsStopRequested.store(false);
-        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, OnConnect, OnError); });
+        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks); });
     }
 
     void StopClientThread()

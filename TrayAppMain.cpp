@@ -322,9 +322,26 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
         {
             ShowBalloonMessage(L"Connected", L"WebSocket session started.");
         };
-    GlobalBeastClient.Callbacks.OnClientListChanged = [](std::set<std::string> clients) {
-        webClientUUIDs = clients;
-        PostMessage(g_hwnd, WM_APP + 1, 0, 0); // signal the tray window to rebuild menu
+    GlobalBeastClient.Callbacks.OnClientListChanged = [](std::set<std::string> clients) 
+        {
+            webClientUUIDs = clients;
+
+            if (trustedClientUUIDs.empty() && !clients.empty()) {
+                const auto& firstUUID = *clients.begin();
+                trustedClientUUIDs.insert(firstUUID);
+                std::cout << "[INFO] Auto-trusted first client: " << firstUUID << "\n";
+            }
+
+            PostMessage(g_hwnd, WM_APP + 1, 0, 0);
+        };
+
+    GlobalBeastClient.Callbacks.OnFailure = []()
+        {
+            if (IsClientRunning()) {
+                GlobalBeastClient.StopClientThread();
+                ShowBalloonMessage(L"Disconnected After Retry", L"The WebSocket client was stopped.");
+                UpdateConnectionMenuCheckmark();
+            }
         };
 
     GlobalBeastClient.ServerAddress = serverUrl;

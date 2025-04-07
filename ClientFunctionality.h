@@ -59,6 +59,23 @@ struct ClientCallbacks
 	std::function<void()> OnConnect;
 	std::function<void(const std::string&)> OnError;
 	std::function<void(std::set<std::string>)> OnClientListChanged;
+	std::function<void()> OnFailure;
+
+	template<typename Fn, typename... Args>
+	void CallOnNewThread(Fn&& fn, Args&&... args) const
+	{
+		std::thread([f = std::forward<Fn>(fn), ...capturedArgs = std::forward<Args>(args)]() mutable {
+			f(std::forward<Args>(capturedArgs)...);
+			}).detach();
+	}
+
+	void CallOnNewThread(const std::function<void()>& fn) const
+	{
+		std::thread([f = fn]() {
+			f();
+			}).detach();
+	}
+
 };
 
 // Array to track 0 = up, 1 = down
@@ -172,13 +189,14 @@ void WebSocketClient(
 	const ClientCallbacks& callbacks
 )
 {
-	constexpr int max_retries = -1; // Infinite retries
-	constexpr int reconnect_delay_ms = 3000; // Delay between reconnects
+	constexpr int max_retries = 5;
+	constexpr int reconnect_delay_ms = 1000; // Delay between reconnects
 	constexpr std::chrono::seconds ping_interval{ 50 };
 
 	int retry_count = 0;
 
-	while (max_retries < 0 || retry_count < max_retries) {
+	while (max_retries < 0 || retry_count < max_retries) 
+	{
 		try {
 			asio::io_context ioc;
 			auto work_guard = asio::make_work_guard(ioc);
@@ -283,5 +301,9 @@ void WebSocketClient(
 			std::cerr << "[INFO] Attempting to reconnect in " << reconnect_delay_ms << "ms...\n";
 			std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms));
 		}
+	}
+	if (callbacks.OnFailure)
+	{
+		callbacks.CallOnNewThread(callbacks.OnFailure);
 	}
 }

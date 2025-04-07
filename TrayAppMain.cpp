@@ -1,4 +1,4 @@
-// TrayAppSetup.cpp
+// TrayAppMain.cpp
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -57,8 +57,8 @@ void ShowBalloonMessage(const std::wstring& title, const std::wstring& message, 
     // Clamp the message to 255 characters + null terminator
     std::wstring safeMessage = message.substr(0, ARRAYSIZE(nid.szInfo) - 1);
     wcsncpy_s(nid.szInfo, safeMessage.c_str(), ARRAYSIZE(nid.szInfo));
-
-    nid.dwInfoFlags = iconType;
+    
+    nid.dwInfoFlags = iconType | NIIF_NOSOUND;
     nid.uTimeout = timeoutMs;
 
     Shell_NotifyIcon(NIM_MODIFY, &nid);

@@ -218,7 +218,7 @@ void WebSocketClient(
 			const auto results = resolver.resolve(host, port);
 			asio::connect(ws.next_layer().next_layer(), results.begin(), results.end());
 			ws.next_layer().handshake(ssl::stream_base::client);
-			ws.handshake(host, "/");
+			ws.handshake(host, "/ws/");
 
 			nlohmann::json register_msg = {
 				{"session_token", session_token},

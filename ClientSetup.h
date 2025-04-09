@@ -69,11 +69,15 @@ struct WebSocketClientGlobal
     std::thread ClientThread;
     std::string CurrentSessionToken;
     std::atomic<bool> IsStopRequested{};
+private:
+    std::mutex threadUpdateMutex;
+public:
 
     ClientCallbacks Callbacks;
 
     void Init(std::string sessionToken)
     {
+        std::scoped_lock lock(threadUpdateMutex);
         CurrentSessionToken = std::move(sessionToken);
         IsStopRequested.store(false);
         ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks); });
@@ -88,20 +92,34 @@ struct WebSocketClientGlobal
     {
         StopClientThread();
 
-        // Reset stop request, start new thread with new session token.
+        std::scoped_lock lock(threadUpdateMutex);
         CurrentSessionToken = std::move(sessionTokenUpdate);
         IsStopRequested.store(false);
-        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks); });
+        ClientThread = std::thread([&]() {
+            StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks);
+            });
     }
 
     void StopClientThread()
     {
-        // If there is a joinable running thread...
-        if (ClientThread.joinable())
+        std::thread localThread;
+
         {
-            // Request stop, join and wait.
+            std::scoped_lock lock(threadUpdateMutex);
             IsStopRequested.store(true);
-            ClientThread.join();
+
+            if (ClientThread.joinable() && ClientThread.get_id() != std::this_thread::get_id()) {
+                std::swap(localThread, ClientThread);
+            }
         }
+
+        // Join outside the lock
+        if (localThread.joinable())
+            localThread.join();
+    }
+
+    bool IsClientRunning() const
+    {
+        return ClientThread.joinable();
     }
 };

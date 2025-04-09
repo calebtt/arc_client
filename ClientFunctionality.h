@@ -278,9 +278,21 @@ void WebSocketClient(
 			for (auto& ca : cleanup_actions)
 				ca();
 
-
-			ws.close(websocket::close_code::normal);
-			std::cout << "[" << client_type << " Client] Connection closed gracefully.\n";
+			if (ws.is_open()) {
+				boost::system::error_code ec;
+				ws.close(websocket::close_code::normal, ec);
+				if (ec &&
+					ec != boost::asio::error::eof &&
+					ec != boost::asio::ssl::error::stream_truncated &&
+					ec.category() != boost::asio::error::get_ssl_category()) // Optional filter
+				{
+					std::cerr << "[WARN] WebSocket close error: " << ec.message() << "\n";
+				}
+				else
+				{
+					std::cout << "[" << client_type << " Client] Connection closed gracefully.\n";
+				}
+			}
 
 			retry_count = 0; // Reset retry count on clean exit
 			break; // Exit loop normally

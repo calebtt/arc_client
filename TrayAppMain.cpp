@@ -38,7 +38,7 @@ std::set<std::string> webClientUUIDs;
 
 bool IsClientRunning()
 {
-    return GlobalBeastClient.ClientThread.joinable();
+    return GlobalBeastClient.IsClientRunning();
 }
 
 void UpdateConnectionMenuCheckmark() {

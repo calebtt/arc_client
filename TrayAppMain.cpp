@@ -251,7 +251,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
             PostQuitMessage(0);
             break;
         case ID_TRAY_TOGGLE_BRIGHTNESS:
-            ToggleMultiMonitorOverlay();
+            ToggleSingleMonitorOverlay();
             break;
         case ID_TRAY_SENSITIVITY_TOGGLE:
             GetSensitivityTogglerInstance().Toggle();
@@ -265,7 +265,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) 
                 ShowBalloonMessage(L"Disconnected", L"The WebSocket client was stopped.");
             }
             else {
-                GlobalBeastClient.Init(ReadSessionToken());
+                GlobalBeastClient.Init(ReadSessionToken(), g_hwnd);
             }
             UpdateConnectionMenuCheckmark();
             break;
@@ -345,7 +345,7 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int)
         };
 
     GlobalBeastClient.ServerAddress = serverUrl;
-    GlobalBeastClient.Init(ReadSessionToken());
+    GlobalBeastClient.Init(ReadSessionToken(), g_hwnd);
 
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {

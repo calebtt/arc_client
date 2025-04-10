@@ -47,7 +47,8 @@ void StartArcClient(
     const std::string& serverAddress, 
     const std::string& sessionToken, 
     std::atomic<bool>& should_stop,
-    const ClientCallbacks& callbacks)
+    const ClientCallbacks& callbacks,
+    std::shared_ptr<sds::Translator> translatorPtr)
 {
     if (sessionToken.empty()) {
         std::cerr << "Error: No valid session token found. Exiting.\n";
@@ -55,7 +56,7 @@ void StartArcClient(
     }
 
     std::cout << "[Session] Connecting to " << serverAddress << ":" << portString << '\n';
-    WebSocketClient(serverAddress, portString, sessionToken, "desktop", should_stop, callbacks);
+    WebSocketClient(serverAddress, portString, sessionToken, "desktop", should_stop, callbacks, translatorPtr);
     return;
 }
 
@@ -69,18 +70,22 @@ struct WebSocketClientGlobal
     std::thread ClientThread;
     std::string CurrentSessionToken;
     std::atomic<bool> IsStopRequested{};
+    std::shared_ptr<sds::Translator> translatorPtr{};
 private:
+    HWND m_uiHwnd{};
     std::mutex threadUpdateMutex;
 public:
 
     ClientCallbacks Callbacks;
 
-    void Init(std::string sessionToken)
+    void Init(std::string sessionToken, HWND uiHwnd)
     {
+        m_uiHwnd = uiHwnd;
+        translatorPtr = std::make_shared<sds::Translator>(GetAllMappings(uiHwnd));
         std::scoped_lock lock(threadUpdateMutex);
         CurrentSessionToken = std::move(sessionToken);
         IsStopRequested.store(false);
-        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks); });
+        ClientThread = std::thread([&]() { StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks, translatorPtr); });
     }
 
     ~WebSocketClientGlobal() noexcept
@@ -96,7 +101,7 @@ public:
         CurrentSessionToken = std::move(sessionTokenUpdate);
         IsStopRequested.store(false);
         ClientThread = std::thread([&]() {
-            StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks);
+            StartArcClient(PortString, ServerAddress, CurrentSessionToken, IsStopRequested, Callbacks, translatorPtr);
             });
     }
 

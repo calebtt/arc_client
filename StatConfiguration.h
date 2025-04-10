@@ -297,7 +297,7 @@ inline auto GetDriverMouseMappings()
 	return mapBuffer;
 }
 
-inline auto GetDriverKeyboardMappings()
+inline auto GetDriverKeyboardMappings(HWND uiHwnd)
 {
 	using std::vector;
 	using sds::MappingContainer;
@@ -390,7 +390,7 @@ inline auto GetDriverKeyboardMappings()
 		},
 		MappingContainer
 		{
-			.OnDown = []() { ToggleMultiMonitorOverlay(); },
+			.OnDown = [uiHwnd]() { PostMessage(uiHwnd, WM_COMMAND, 1002, 0); },
 			.ButtonVirtualKeycode = ToggleMonitorOverlay,
 			.RepeatingKeyBehavior = RepeatType::None
 		}
@@ -399,10 +399,10 @@ inline auto GetDriverKeyboardMappings()
 	return mapBuffer;
 }
 
-inline auto GetAllMappings()
+inline auto GetAllMappings(HWND uiHwnd)
 {
 	auto clickMappings = GetClickMappings();
-	auto keyboardMappings = GetDriverKeyboardMappings();
+	auto keyboardMappings = GetDriverKeyboardMappings(uiHwnd);
 	auto allMappings = GetDriverMouseMappings();
 	allMappings.insert(allMappings.end(), clickMappings.begin(), clickMappings.end());
 	allMappings.insert(allMappings.end(), keyboardMappings.begin(), keyboardMappings.end());

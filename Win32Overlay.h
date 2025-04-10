@@ -11,17 +11,61 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <unordered_map>
 
-std::vector<HWND> overlayWindows;
 
 enum class BrightnessLevel { Off, Dark, Darker };
-BrightnessLevel brightnessState = BrightnessLevel::Off;
+
+class BrightnessStateMachine {
+private:
+    BrightnessLevel state = BrightnessLevel::Off;
+public:
+    [[nodiscard]] BrightnessLevel Current() const {
+        return state;
+    }
+
+    BrightnessLevel NextState() {
+        state = static_cast<BrightnessLevel>((static_cast<int>(state) + 1) % 3);
+        return state;
+    }
+};
+
+struct BrightnessRenderInfo {
+    uint8_t alpha;
+    std::wstring label;
+};
+
+BrightnessRenderInfo GetBrightnessLevelRenderInfo(BrightnessLevel level) {
+    switch (level) {
+    case BrightnessLevel::Dark:
+        return { 128, L"50%" };
+    case BrightnessLevel::Darker:
+        return { 200, L"78%" };
+    case BrightnessLevel::Off:
+    default:
+        return { 0, L"" };
+    }
+}
+
+static HWND overlayWindow = nullptr;
+BrightnessStateMachine brightnessState;
+
+RECT GetPrimaryMonitorRect() {
+    RECT rc;
+    //SystemParametersInfo(SPI_GETWORKAREA, 0, &rc, 0);
+    // Or use full screen:
+    GetWindowRect(GetDesktopWindow(), &rc);
+    return rc;
+}
+
 
 LRESULT CALLBACK OverlayWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-void CreateOverlayForMonitor(const RECT& monitorRect, HINSTANCE hInstance, uint8_t alpha, std::wstring_view labelText = L"") {
+HWND CreateOverlayForMonitor(const RECT& monitorRect, HINSTANCE hInstance, uint8_t alpha, std::wstring_view labelText = L"")
+{
     static const wchar_t* className = L"BlueLightOverlayClass";
     static bool classRegistered = false;
 
@@ -87,13 +131,14 @@ void CreateOverlayForMonitor(const RECT& monitorRect, HINSTANCE hInstance, uint8
     DeleteDC(hdcMem);
 
     ShowWindow(hwnd, SW_SHOW);
-    overlayWindows.push_back(hwnd);
 
     if (!labelText.empty()) {
         std::thread([hwnd, monitorRect, hInstance, alpha]() {
             std::this_thread::sleep_for(std::chrono::seconds(2));
+
             HDC hdcScreen = GetDC(NULL);
             HDC hdcMem = CreateCompatibleDC(hdcScreen);
+
             int width = monitorRect.right - monitorRect.left;
             int height = monitorRect.bottom - monitorRect.top;
 
@@ -125,25 +170,30 @@ void CreateOverlayForMonitor(const RECT& monitorRect, HINSTANCE hInstance, uint8
             DeleteDC(hdcMem);
             }).detach();
     }
+
+    return hwnd;
+
 }
 
-BOOL CALLBACK MonitorEnumProc(HMONITOR, HDC, LPRECT lprcMonitor, LPARAM lParam) {
-    auto [alpha, label] = *reinterpret_cast<std::pair<uint8_t, std::wstring>*>(lParam);
-    CreateOverlayForMonitor(*lprcMonitor, GetModuleHandle(nullptr), alpha, label);
-    return TRUE;
+void ToggleSingleMonitorOverlay()
+{
+    static std::mutex overlayMutex;
+    std::scoped_lock lock(overlayMutex);
+
+    // Destroy previous overlay
+    if (overlayWindow) {
+        DestroyWindow(overlayWindow);
+        overlayWindow = nullptr;
+    }
+
+    const auto nextBrightness = brightnessState.NextState();
+    const auto info = GetBrightnessLevelRenderInfo(nextBrightness);
+
+    if (nextBrightness == BrightnessLevel::Off)
+        return;
+
+    RECT monitorRect = GetPrimaryMonitorRect();
+    overlayWindow = CreateOverlayForMonitor(monitorRect, GetModuleHandle(nullptr), info.alpha, info.label);
 }
 
-void ToggleMultiMonitorOverlay() {
-    for (auto hwnd : overlayWindows) DestroyWindow(hwnd);
-    overlayWindows.clear();
 
-    brightnessState = static_cast<BrightnessLevel>((static_cast<int>(brightnessState) + 1) % 3);
-
-    if (brightnessState == BrightnessLevel::Off) return;
-
-    uint8_t alpha = (brightnessState == BrightnessLevel::Dark) ? 128 : 200;
-    std::wstring label = (brightnessState == BrightnessLevel::Dark) ? L"50%" : L"78%";
-
-    std::pair<uint8_t, std::wstring> stateInfo = { alpha, label };
-    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, reinterpret_cast<LPARAM>(&stateInfo));
-}

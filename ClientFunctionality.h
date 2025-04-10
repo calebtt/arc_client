@@ -81,7 +81,6 @@ struct ClientCallbacks
 // Array to track 0 = up, 1 = down
 static std::array<bool, 32> keyStateBuffer{};
 static std::mutex keyStateMutex{};
-static sds::Translator translator(GetAllMappings());
 
 std::set<std::string> connectedClientUUIDs;
 std::set<std::string> trustedClientUUIDs;
@@ -100,8 +99,6 @@ void HandleWebClientListUpdate(const nlohmann::json& json, const ClientCallbacks
 		callbacks.OnClientListChanged(connectedClientUUIDs);
 	}
 }
-
-
 
 void UpdateStateBuffer(const std::string state, const std::string command)
 {
@@ -186,13 +183,13 @@ void WebSocketClient(
 	const std::string& session_token,
 	const std::string& client_type,
 	std::atomic<bool>& should_stop,
-	const ClientCallbacks& callbacks
+	const ClientCallbacks& callbacks,
+	std::shared_ptr<sds::Translator> translatorPtr
 )
 {
 	constexpr int max_retries = 5;
 	constexpr int reconnect_delay_ms = 1000; // Delay between reconnects
 	constexpr std::chrono::seconds ping_interval{ 50 };
-
 	int retry_count = 0;
 
 	while (max_retries < 0 || retry_count < max_retries) 
@@ -245,7 +242,9 @@ void WebSocketClient(
 								heldDownKeys.push_back(static_cast<int32_t>(i));
 						}
 					}
-					translator(heldDownKeys)();
+					if(translatorPtr)
+						translatorPtr->GetUpdatedState(heldDownKeys)();
+
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
 				});
@@ -274,9 +273,12 @@ void WebSocketClient(
 			asio_thread.join();
 			translator_thread.join();
 
-			auto cleanup_actions = translator.GetCleanupActions();
-			for (auto& ca : cleanup_actions)
-				ca();
+			if (translatorPtr)
+			{
+				auto cleanup_actions = translatorPtr->GetCleanupActions();
+				for (auto& ca : cleanup_actions)
+					ca();
+			}
 
 			if (ws.is_open()) {
 				boost::system::error_code ec;

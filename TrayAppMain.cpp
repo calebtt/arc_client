@@ -5,6 +5,9 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef FI_IMPLEMENTATION
+#define FI_IMPLEMENTATION
+#endif
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
@@ -12,6 +15,7 @@
 #include <commctrl.h>
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <fakeinput/fakeinput.hpp>
 #include "Win32Overlay.h"
 #include "StatConfiguration.h"
 #include "ClientSetup.h"

@@ -5,10 +5,14 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
+#ifndef FI_IMPLEMENTATION
+#define FI_IMPLEMENTATION
+#endif
 #include <Windows.h>
 #include "StreamToActionTranslator.h"
 #include "Win32Overlay.h"
 #include <atomic>
+#include <fakeinput/fakeinput.hpp>
 
 /**
 * \brief Key Repeat Delay is the time delay a button has in-between activations.
@@ -71,6 +75,36 @@ struct SensitivityToggler
 	}
 };
 
+struct MappingsBuilder
+{
+	static FakeInput::Mouse MouseObj;
+	static FakeInput::Keyboard KeyboardObj;
+
+
+	static void SendMouseMove(const int x, const int y) noexcept
+	{
+		MouseObj.move(x, y);
+	}
+
+	// Simulate Mouse Clicks
+	static void SendMouseClick(FakeInput::MouseButton button) noexcept
+	{
+		// TODO this might need a delay.
+		MouseObj.pressButton(button);
+		MouseObj.releaseButton(button); 
+	}
+
+	static void SendMultimediaKey(FakeInput::KeyType vk, const bool doDown) noexcept
+	{
+		if(doDown)
+			KeyboardObj.pressKey(FakeInput::CreateKeyFromKeyType(vk));
+		else
+			KeyboardObj.releaseKey(FakeInput::CreateKeyFromKeyType(vk));
+	}
+};
+MappingsBuilder inputSimulator;
+
+
 // get global sensitivity instance
 SensitivityToggler& GetSensitivityTogglerInstance() 
 {
@@ -78,78 +112,7 @@ SensitivityToggler& GetSensitivityTogglerInstance()
 	return instance;
 }
 
-inline auto CallSendInput(INPUT* inp, std::uint32_t numSent) noexcept -> UINT
-{
-	return SendInput(static_cast<UINT>(numSent), inp, sizeof(INPUT));
-}
 
-inline void SendMouseMove(const int x, const int y) noexcept
-{
-	INPUT m_mouseMoveInput{};
-	m_mouseMoveInput.type = INPUT_MOUSE;
-	m_mouseMoveInput.mi.dwFlags = MOUSEEVENTF_MOVE;
-
-	using dx_t = decltype(m_mouseMoveInput.mi.dx);
-	using dy_t = decltype(m_mouseMoveInput.mi.dy);
-	m_mouseMoveInput.mi.dx = static_cast<dx_t>(x);
-	m_mouseMoveInput.mi.dy = -static_cast<dy_t>(y);
-	m_mouseMoveInput.mi.dwExtraInfo = GetMessageExtraInfo();
-	//Finally, send the input
-	CallSendInput(&m_mouseMoveInput, 1);
-}
-
-// Simulate Mouse Clicks
-inline void SendMouseClick(int button)
-{
-	INPUT input = {};
-	input.type = INPUT_MOUSE;
-
-	if (button == MouseLeftClick) {
-		input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-		SendInput(1, &input, sizeof(INPUT));
-		input.mi.dwFlags = MOUSEEVENTF_LEFTUP;
-		SendInput(1, &input, sizeof(INPUT));
-	}
-	else if (button == MouseRightClick) {
-		input.mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
-		SendInput(1, &input, sizeof(INPUT));
-		input.mi.dwFlags = MOUSEEVENTF_RIGHTUP;
-		SendInput(1, &input, sizeof(INPUT));
-	}
-	else if (button == MouseMiddleClick) {
-		input.mi.dwFlags = MOUSEEVENTF_MIDDLEDOWN;
-		SendInput(1, &input, sizeof(INPUT));
-		input.mi.dwFlags = MOUSEEVENTF_MIDDLEUP;
-		SendInput(1, &input, sizeof(INPUT));
-	}
-}
-
-// Toggle On-Screen Keyboard
-inline void ToggleOnScreenKeyboardFn()
-{
-	static bool keyboardOpen = false;
-	if (keyboardOpen) {
-		system("taskkill /IM osk.exe /F"); // Close OSK
-	}
-	else {
-		system("osk"); // Open OSK
-	}
-	keyboardOpen = !keyboardOpen;
-}
-
-inline void SendMultimediaKey(const WORD vk, const bool doDown) noexcept
-{
-	INPUT keyInput{};
-	keyInput.type = INPUT_KEYBOARD;
-	keyInput.ki.wVk = vk;
-	keyInput.ki.dwExtraInfo = GetMessageExtraInfo();
-	if (!doDown)
-	{
-		keyInput.ki.dwFlags = KEYEVENTF_KEYUP;
-	}
-	//Finally, send the input
-	CallSendInput(&keyInput, 1);
-}
 
 inline auto GetClickMappings()
 {
@@ -162,7 +125,7 @@ inline auto GetClickMappings()
 		// Left Click
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseClick(MouseLeftClick); },
+			.OnDown = []() { inputSimulator.SendMouseClick(FakeInput::Mouse_Left); },
 			.ButtonVirtualKeycode = MouseLeftClick,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
@@ -170,7 +133,7 @@ inline auto GetClickMappings()
 		// Right Click
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseClick(MouseRightClick); },
+			.OnDown = []() { inputSimulator.SendMouseClick(FakeInput::Mouse_Right); },
 			.ButtonVirtualKeycode = MouseRightClick,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
@@ -178,7 +141,7 @@ inline auto GetClickMappings()
 		// Middle Click
 		MappingContainer
 		{
-			.OnDown = []() { SendMouseClick(MouseMiddleClick); },
+			.OnDown = []() { inputSimulator.SendMouseClick(FakeInput::Mouse_Middle); },
 			.ButtonVirtualKeycode = MouseMiddleClick,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
@@ -202,14 +165,15 @@ inline auto GetDriverMouseMappings()
 
 	constexpr auto FirstDelay = std::chrono::nanoseconds(0);   // No initial delay
 	constexpr auto RepeatDelay = std::chrono::microseconds(1200);  // 1.2ms repeat delay
+	using FakeInput::Mouse;
 
 	vector<MappingContainer> mapBuffer =
 	{
 		// Move Up
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(0, GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(0, GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() { Mouse::move(0, -GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { Mouse::move(0, -GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveUp,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -219,8 +183,8 @@ inline auto GetDriverMouseMappings()
 		// Move Down
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(0, -GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(0, -GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() { Mouse::move(0, GetSensitivityTogglerInstance().Get()); },
+			.OnRepeat = [&]() { Mouse::move(0, GetSensitivityTogglerInstance().Get()); },
 			.ButtonVirtualKeycode = MouseMoveDown,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -230,8 +194,8 @@ inline auto GetDriverMouseMappings()
 		// Move Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), 0); },
-			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), 0); },
+			.OnDown = [&]() { Mouse::move(GetSensitivityTogglerInstance().Get(), 0); },
+			.OnRepeat = [&]() { Mouse::move(GetSensitivityTogglerInstance().Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -241,8 +205,8 @@ inline auto GetDriverMouseMappings()
 		// Move Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), 0); },
-			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), 0); },
+			.OnDown = [&]() { Mouse::move(-GetSensitivityTogglerInstance().Get(), 0); },
+			.OnRepeat = [&]() { Mouse::move(-GetSensitivityTogglerInstance().Get(), 0); },
 			.ButtonVirtualKeycode = MouseMoveLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -252,8 +216,14 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(-s, -s);
+			},
+			.OnRepeat = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(-s, -s);
+			},
 			.ButtonVirtualKeycode = MouseMoveUpLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -263,8 +233,14 @@ inline auto GetDriverMouseMappings()
 		// Move Up-Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(s, -s);
+			},
+			.OnRepeat = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(s, -s);
+			},
 			.ButtonVirtualKeycode = MouseMoveUpRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -274,8 +250,14 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Right
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(s, s);
+			},
+			.OnRepeat = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(s, s);
+			},
 			.ButtonVirtualKeycode = MouseMoveDownRight,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -285,8 +267,14 @@ inline auto GetDriverMouseMappings()
 		// Move Down-Left
 		MappingContainer
 		{
-			.OnDown = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
-			.OnRepeat = [&]() { SendMouseMove(-GetSensitivityTogglerInstance().Get(), -GetSensitivityTogglerInstance().Get()); },
+			.OnDown = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(-s, s);
+			},
+			.OnRepeat = [&]() {
+				auto s = GetSensitivityTogglerInstance().Get();
+				Mouse::move(-s, s);
+			},
 			.ButtonVirtualKeycode = MouseMoveDownLeft,
 			.RepeatingKeyBehavior = RepeatType::Infinite,
 			.DelayBeforeFirstRepeat = FirstDelay,
@@ -308,50 +296,50 @@ inline auto GetDriverKeyboardMappings(HWND uiHwnd)
 		// Multimedia Controls
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_MEDIA_PLAY_PAUSE, true); },
-			.OnUp = []() { SendMultimediaKey(VK_MEDIA_PLAY_PAUSE, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaPlayPause, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaPlayPause, false); },
 			.ButtonVirtualKeycode = MediaPlayPause,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_MEDIA_NEXT_TRACK, true); },
-			.OnUp = []() { SendMultimediaKey(VK_MEDIA_NEXT_TRACK, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaNext, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaNext, false); },
 			.ButtonVirtualKeycode = MediaNextTrack,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_MEDIA_PREV_TRACK, true); },
-			.OnUp = []() { SendMultimediaKey(VK_MEDIA_PREV_TRACK, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaPrev, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaPrev, false); },
 			.ButtonVirtualKeycode = MediaPrevTrack,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_VOLUME_UP, true); },
-			.OnUp = []() { SendMultimediaKey(VK_VOLUME_UP, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeUp, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeUp, false); },
 			.ButtonVirtualKeycode = VolumeUp,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_VOLUME_DOWN, true); },
-			.OnUp = []() { SendMultimediaKey(VK_VOLUME_DOWN, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeDown, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeDown, false); },
 			.ButtonVirtualKeycode = VolumeDown,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_VOLUME_MUTE, true); },
-			.OnUp = []() { SendMultimediaKey(VK_VOLUME_MUTE, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeMute, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_VolumeMute, false); },
 			.ButtonVirtualKeycode = VolumeMute,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_MEDIA_STOP, true); },
-			.OnUp = []() { SendMultimediaKey(VK_MEDIA_STOP, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaStop, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_MediaStop, false); },
 			.ButtonVirtualKeycode = MediaStop,
 			.RepeatingKeyBehavior = RepeatType::None
 		},
@@ -377,8 +365,8 @@ inline auto GetDriverKeyboardMappings(HWND uiHwnd)
 		},
 		MappingContainer
 		{
-			.OnDown = []() { SendMultimediaKey(VK_ESCAPE, true); },
-			.OnUp = []() { SendMultimediaKey(VK_ESCAPE, false); },
+			.OnDown = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_Escape, true); },
+			.OnUp = []() { inputSimulator.SendMultimediaKey(FakeInput::Key_Escape, false); },
 			.ButtonVirtualKeycode = EscapeKey,
 			.RepeatingKeyBehavior = RepeatType::None
 		},

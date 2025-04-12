@@ -1,0 +1,3 @@
+[submodule "extern/FakeInputRev"]
+	path = extern/FakeInputRev
+	url = https://github.com/calebtt/FakeInputRev.git

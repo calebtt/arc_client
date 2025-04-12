@@ -96,6 +96,18 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\include;C:\Users\caleb\source\repos\arc_client\extern\FakeInputRev;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\build\Release;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugRemote|x64'">
+    <IncludePath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\include;C:\Users\caleb\source\repos\arc_client\extern\FakeInputRev;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\build\Release;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\include;C:\Users\caleb\source\repos\arc_client\extern\FakeInputRev;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Users\caleb\source\repos\arc_client\extern\libuiohook\build\Release;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>false</VcpkgEnableManifest>
   </PropertyGroup>
